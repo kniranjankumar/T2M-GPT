@@ -63,6 +63,8 @@ def get_args_parser():
     parser.add_argument('--seed', default=123, type=int, help='seed for initializing training. ')
     parser.add_argument("--if-maxtest", action='store_true', help="test in max")
     parser.add_argument('--pkeep', type=float, default=1.0, help='keep rate for gpt training')
-    
+    parser.add_argument('--instruction', nargs='+', type=str, help='instruction for the robot to follow',required=True)#, default="a person is saluting")
+
+
     
     return parser.parse_args()
