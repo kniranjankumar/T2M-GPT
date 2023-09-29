@@ -68,7 +68,7 @@ def retarget_humanoid_to_digit_ik(marker_positions, marker_orientations, digit_e
     # curr_orientation[3,:] = marker_orientations[3]
     joint_pose = p.calculateInverseKinematics2(digit_id, digit_eff_idxs,
                                                     marker_positions,
-                                                    # marker_orientations,
+                                                    marker_orientations,
                                                     # lowerLimits=[-1]*22,
                                                     # upperLimits=[1]*22,
                                                     restPoses=initPose,
@@ -140,6 +140,22 @@ def get_quat_error(quat1,quat2):
     # print(angles)
     
     return angles
+def get_quaternion_from_points(points):
+    y_axis = points[1]-points[2]
+    x_axis = np.cross(points[0]-points[1], points[0]-points[2])
+    z_axis = np.cross(x_axis,y_axis)
+    axes = [axis/np.linalg.norm(axis) for axis in [x_axis, y_axis, z_axis]]
+    q = get_quaterion_from_R(np.stack(axes,axis=1))
+    # q = [q[2],q[0],q[1],q[3]]
+    q = p.multiplyTransforms([0,0,0], p.getQuaternionFromEuler([np.pi/2,0,0]),[0,0,0], q)[1]
+    # q = p.multiplyTransforms([0,0,0], p.getQuaternionFromEuler([0,0,np.pi/2]),[0,0,0], q)[1]
+    
+    return q
+    
+
+def get_quaterion_from_R(R_matrix):
+    rot = R.from_matrix(R_matrix)
+    return rot.as_quat()
 
 def create_markers_from_id(agent_id, body_idxs, radius=0.05,colors=[[1,0,0,1], [0,1,0,1], [0,0,1,1], [1,1,0,1]]):
     markers = []
@@ -165,26 +181,26 @@ def create_markers_from_eff_pos(eff_pos, radius=0.05, colors=[[1,0,0,1], [0,1,0,
 def drawVector(vector):
     p.addUserDebugLine([0,0,0], vector*10, [1,0,0], 5)
 
-def get_quaterion_from_torso_points(torso_points):
-    torso_points = list(torso_points)
-    ori_vec = np.array(get_orientation_vector(*torso_points))
-    relative_quaternion = p.getQuaternionFromAxisAngle(ori_vec, np.pi)
-    # drawVector(ori_vec)
-    # ori_vec_ref = np.array([0,0,1])
-    # rotation_matrix = (R.align_vectors(ori_vec_ref.reshape(1, -1), ori_vec.reshape(1, -1))[0]).as_matrix()
-    # relative_quaternion = R.from_matrix(rotation_matrix).as_quat()
-    return relative_quaternion
+# def get_quaterion_from_torso_points(torso_points):
+#     torso_points = list(torso_points)
+#     ori_vec = np.array(get_orientation_vector(*torso_points))
+#     relative_quaternion = p.getQuaternionFromAxisAngle(ori_vec, np.pi)
+#     # drawVector(ori_vec)
+#     # ori_vec_ref = np.array([0,0,1])
+#     # rotation_matrix = (R.align_vectors(ori_vec_ref.reshape(1, -1), ori_vec.reshape(1, -1))[0]).as_matrix()
+#     # relative_quaternion = R.from_matrix(rotation_matrix).as_quat()
+#     return relative_quaternion
 
-def get_orientation_vector(point1, point2, point3):
-    # Calculate the vectors between the points
-    v1 = point2 - point1
-    v2 = point3 - point1
+# def get_orientation_vector(point1, point2, point3):
+#     # Calculate the vectors between the points
+#     v1 = point2 - point1
+#     v2 = point3 - point1
     
-    # Calculate the cross product of the vectors
-    cross_product = np.cross(v1, v2)
-    # Normalize the cross product
-    norm_cross_product = cross_product / np.linalg.norm(cross_product)
-    return norm_cross_product
+#     # Calculate the cross product of the vectors
+#     cross_product = np.cross(v1, v2)
+#     # Normalize the cross product
+#     norm_cross_product = cross_product / np.linalg.norm(cross_product)
+#     return norm_cross_product
     
 p.connect(p.GUI)
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -196,9 +212,10 @@ p.setRealTimeSimulation(0)
 
 
 plane_id = p.loadURDF("plane.urdf",[0,0,0],[0,0,0,1])
-digit_id = p.loadURDF("/home/dan/Projects/dynamic_motion_imitation/IsaacGymEnvs/assets/urdf/DigitRobot/DigitRobot/urdf/digit_model.urdf",[0,-1,1.1],[0,0,0,1])#, useFixedBase=True)
+# digit_id = p.loadURDF("/home/niranjan/Projects/dynamic_motion_imitation/IsaacGymEnvs/assets/urdf/DigitRobot/DigitRobot/urdf/digit_model.urdf
+digit_id = p.loadURDF("/home/niranjan/Projects/dynamic_motion_imitation/IsaacGymEnvs/assets/urdf/DigitRobot/DigitRobot/urdf/digit_model.urdf",[0,-1,1.1],[0,0,0,1])#, flags=p.URDF_USE_SELF_COLLISION)#, useFixedBase=True)
 # digit_id = p.loadURDF("../assets/urdf/digit_description-main/urdf/digit_float.urdf",[0,-1,1.1],[0,0,0,1])
-humanoid_id = p.loadMJCF("/home/dan/Projects/dynamic_motion_imitation/IsaacGymEnvs/assets/mjcf/amp_humanoid_pybullet.xml")[0]
+humanoid_id = p.loadMJCF("/home/niranjan/Projects/dynamic_motion_imitation/IsaacGymEnvs/assets/mjcf/amp_humanoid_pybullet.xml")[0]
 
 humanoid_eff_names = ["right_hand", "left_hand", "right_foot", "left_foot"]
 humanoid_bodies = [p.getJointInfo(humanoid_id, i)[12].decode() for i in range(p.getNumJoints(humanoid_id))]
@@ -227,7 +244,7 @@ scaling_factor = 0.9
 instruction = '_'.join(args.instruction)
 save_gif=False
 # print(instruction)
-motion_file_path = "/home/dan/Projects/dynamic_motion_imitation/T2M-GPT/motions/"+instruction+".npy"
+motion_file_path = "/home/niranjan/Projects/dynamic_motion_imitation/T2M-GPT/motions/"+instruction+".npy"
 
 if load_motion and os.path.isfile(motion_file_path):
     print("loading file")
@@ -307,7 +324,6 @@ llm_xyz = np.zeros_like(xyz)
 #     llm_xyz[:,j,:] = (xyz[:,j,:]- xyz[:,0,:])
 #     llm_xyz[:,j,1] += xyz[:,0,1]
 llm_xyz = xyz
-torso_points = np.stack([llm_xyz[:,i,:] for i in [9,14,13]], axis=1)
 llm_xyz[:,:,1] +=0.09
 # llm_xyz[:,:,1] += 0.15
 # llm_xyz[:,10,1] -=0.11
@@ -320,6 +336,8 @@ height_offset = 0.2
 for i in range(llm_xyz.shape[0]):
     for j in range(llm_xyz.shape[1]):
         llm_xyz[i,j,:] = p.multiplyTransforms([0,0,0], [0,0.707,0,0.707], llm_xyz[i,j,:], [0,0,0,1])[0]
+torso_points = np.stack([llm_xyz[:,i,:] for i in [9,13,14]], axis=1)
+
 # ori_vec = -np.array(get_orientation_vector(*torso_points))
 # print(ori_vec)
 # ori_vec_ref = np.array([1,0,0])
@@ -339,7 +357,7 @@ for i in range(llm_xyz.shape[0]):
 ############################################################################################################
 ###################################### Mount humanoid and digit to rack ####################################
 ############################################################################################################
-quat = get_quaterion_from_torso_points(torso_points[0])
+quat = get_quaternion_from_points(list(torso_points[0]))
 # p.createConstraint(digit_id, -1, plane_id, -1, p.JOINT_FIXED, [0,0,0], [0,0,0], [0,0,llm_xyz[0,0,1]]+np.array([0,-1,height_offset]),[0,0,0,1],[0,0,0,1])
 # p.createConstraint(humanoid_id, -1, plane_id, -1, p.JOINT_FIXED, [0,0,0], [0,0,0], [0,0,llm_xyz[0,0,1]]+np.array([0,0,0.15]),[0,0,0,1],[0,0,0,1])
 
@@ -434,7 +452,7 @@ for idx in range(llm_xyz.shape[0]):
         offset = np.array([0,-1,0.0])
         pos_eff_humanoid = pos_effs_humanoid[i]
         # pos_eff_humanoid,rot_eff_humanoid = p.getLinkState(humanoid_id, humanoid_eff[i])[4:6]
-        rot_eff_humanoid = [0,0,0,1]
+        rot_eff_humanoid = p.getQuaternionFromEuler([np.pi/2,0,np.pi/2])
         pos_eff_digit,rot_eff_digit = p.getLinkState(digit_id, digit_eff[i])[4:6]
         
         foot_factor = np.array([1,1,1])
@@ -445,34 +463,38 @@ for idx in range(llm_xyz.shape[0]):
         # elif i == 2:
         #     rot_eff_humanoid = p.multiplyTransforms([0,0,0], rot_eff_humanoid, [0,0,0], digit_right_foot_base_rot)[1]
         # else:
-        rot_eff_humanoid = rot_eff_digit
+        if i == 3:
+            rot_eff_humanoid = digit_left_foot_base_rot
+        if i == 2:
+            rot_eff_humanoid = digit_right_foot_base_rot
         
         p.resetBasePositionAndOrientation(markers_humanoid[i], np.array([pos_eff_humanoid[0],pos_eff_humanoid[2],pos_eff_humanoid[1] ])+offset, rot_eff_humanoid)
         p.resetBasePositionAndOrientation(markers_digit[i], pos_eff_digit, rot_eff_digit)
         left_foot_rot_error = np.linalg.norm(get_quat_error(p.getBasePositionAndOrientation(markers_humanoid[3])[1], p.getLinkState(digit_id, digit_eff[3])[5]))
         right_foot_rot_error = np.linalg.norm(get_quat_error(p.getBasePositionAndOrientation(markers_humanoid[2])[1], p.getLinkState(digit_id, digit_eff[2])[5]))
     # while get_error(markers_humanoid, digit_eff, digit_id).sum()>0.0001 or left_foot_rot_error>0.1:# or right_foot_rot_error>0.1:
-    # for k in range(10):
-    #     digit_dofs = retarget_humanoid_to_digit_ik([p.getBasePositionAndOrientation(marker)[0] for marker in markers_humanoid], 
-    #                                                 [p.getBasePositionAndOrientation(marker)[1] for marker in markers_humanoid],
-    #                                             digit_eff,
-    #                                             digit_id,
-    #                                             p.getJointStates(digit_id,[i for i in range(p.getNumJoints(digit_id)) if p.getJointInfo(digit_id, i)[3]>-1])[0])
+    for k in range(10):
+        digit_dofs = retarget_humanoid_to_digit_ik([p.getBasePositionAndOrientation(marker)[0] for marker in markers_humanoid], 
+                                                    [p.getBasePositionAndOrientation(marker)[1] for marker in markers_humanoid],
+                                                digit_eff,
+                                                digit_id,
+                                                p.getJointStates(digit_id,[i for i in range(p.getNumJoints(digit_id)) if p.getJointInfo(digit_id, i)[3]>-1])[0])
 
-    #     for i in range(p.getNumJoints(digit_id)):
-    #         jointInfo = p.getJointInfo(digit_id, i)
-    #         qIndex = jointInfo[3]
-    #         if qIndex > -1:
-    #                 p.resetJointState(digit_id,i,digit_dofs[qIndex-7])
+        for i in range(p.getNumJoints(digit_id)):
+            jointInfo = p.getJointInfo(digit_id, i)
+            qIndex = jointInfo[3]
+            if qIndex > -1:
+                    p.resetJointState(digit_id,i,digit_dofs[qIndex-7])
         left_foot_rot_error = np.linalg.norm(get_quat_error(p.getBasePositionAndOrientation(markers_humanoid[3])[1], p.getLinkState(digit_id, digit_eff[3])[5]))
         right_foot_rot_error = np.linalg.norm(get_quat_error(p.getBasePositionAndOrientation(markers_humanoid[2])[1], p.getLinkState(digit_id, digit_eff[2])[5]))
     # retargetted_poses.append(np.concatenate((root_pos[idx].cpu().numpy(),root_rot[idx].cpu().numpy(), digit_dofs)))
     joint_info = {p.getJointInfo(digit_id, digit_body_idx)[12].decode():p.getLinkState(digit_id, digit_body_idx)[5] for digit_body_idx in range(30)}
     llm_pos = llm_xyz[idx,0,:]
-    # body_state.append((joint_info,np.array([llm_pos[0],llm_pos[2],llm_pos[1]]),[0,0,0,1],digit_dofs))
-    q = get_quaterion_from_torso_points(torso_points[idx])
+    q = get_quaternion_from_points(list(torso_points[idx]))
     print(q)
     p.resetBasePositionAndOrientation(digit_id, [llm_pos[0],llm_pos[2],llm_pos[1]]+np.array([0,-1,height_offset]), q)
+    body_state.append((joint_info,np.array([llm_pos[0],llm_pos[2],llm_pos[1]]),q,digit_dofs))
+    
     # error.append(get_error(markers_digit, digit_eff, digit_id))
     # quaternion_error = get_quat_error(p.getBasePositionAndOrientation(markers_humanoid[2])[1], p.getLinkState(digit_id, digit_eff[2])[5])
     # print("q error:", quaternion_error)
